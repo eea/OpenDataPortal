@@ -96,8 +96,10 @@ CONSTRUCT {
        dct:modified ?modified;
        ecodp:keyword ?theme;
        dct:spatial ?pubspatial;
-       dct:subject <http://eurovoc.europa.eu/100155>;
+       dct:subject ?subject;
        dcat:theme ?dcat_theme;
+       dct:isReplacedBy ?isreplaced;
+       dct:replaces ?replaces;
 
        ecodp:contactPoint ?ecodp_contactPoint .
        ?ecodp_contactPoint  rdf:type ?ecodp_contactPoint_type .
@@ -122,7 +124,9 @@ WHERE {
         dct:hasPart ?datatable.
    OPTIONAL { ?dataset dct:issued ?effective }
    OPTIONAL { ?dataset dct:modified ?modified }
-
+   OPTIONAL { ?dataset dct:isReplacedBy ?isreplaced }
+   OPTIONAL { ?dataset dct:replaces ?replaces }
+   
    {select (<%s> as ?ecodp_contactPoint) where {}}
    {select (<%s> as ?ecodp_contactPoint_type) where {}}
    {select ("%s" as ?foaf_phone) where {}}
@@ -182,6 +186,8 @@ WHERE {
    ?datafile dct:title    ?dftitle .
    ?datafile dct:modified ?dfmodified
   } UNION {
+   ?dataset dct:subject ?subject
+  } UNION {
    ?dataset dct:subject ?theme  FILTER (isLiteral(?theme) && !REGEX(?theme,'[()/]'))
   } UNION {
    ?dataset dct:spatial ?spatial .
@@ -190,7 +196,6 @@ WHERE {
   } UNION {
     ?dataset cr:tag ?tag.
       ?dcat_theme a skos:Concept.
-      FILTER (regex(?dcat_theme,"http://eurovoc.europa.eu"))
       ?dcat_theme rdfs:label ?tag.
   }
   FILTER (?dataset = <%s> )
@@ -253,6 +258,7 @@ WHERE {
    OPTIONAL { ?dataset dct:issued ?effective }
    OPTIONAL { ?dataset dct:modified ?modified }
 
+   
    {select (<%s> as ?ecodp_contactPoint) where {}}
    {select (<%s> as ?ecodp_contactPoint_type) where {}}
    {select ("%s" as ?foaf_phone) where {}}
@@ -278,7 +284,6 @@ WHERE {
       ?dataset dct:subject ?subject.
       ?subject rdfs:label ?subject_label.
       ?dcat_theme a skos:Concept.
-      FILTER (regex(?dcat_theme,"http://eurovoc.europa.eu"))
       ?dcat_theme rdfs:label ?subject_label.
   }
   FILTER (?dataset = <%s> )
@@ -349,6 +354,30 @@ WHERE {
             ckan_name = reduce_to_length(ckan_name, 100)
             self.createDSRecord(str(row[0]),str(row[1]), ckan_name)
             self.createAddReplaceLine(str(row[0]),str(row[1]), ckan_name)
+            
+#------------------------
+    _listAllDS = """
+PREFIX a: <http://www.eea.europa.eu/portal_types/Data#>
+PREFIX dct: <http://purl.org/dc/terms/>
+SELECT DISTINCT ?dataset ?id
+WHERE {
+  ?dataset a a:Data ;
+        a:id ?id;
+        dct:description ?description;
+        dct:hasPart ?datatable.
+  OPTIONAL {?dataset dct:isReplacedBy ?isreplaced }
+}
+"""
+    
+    def queryAllDS(self):
+        """ Find datasets and create metadata records for them """
+        result = sparql.query(self.endpoint, self._listAllDS)
+        for row in result.fetchall():
+            print "\t".join(map(str,row))
+            ckan_name = "%s_%s" %(str(row[0]).split("/")[-2], str(row[1]))
+            ckan_name = reduce_to_length(ckan_name, 100)
+            self.createDSRecord(str(row[0]),str(row[1]), ckan_name)
+            self.createAddReplaceLine(str(row[0]),str(row[1]), ckan_name)
 
     #
     # List datasets that have become obsolete. We must tell ODP to remove them
@@ -404,7 +433,9 @@ WHERE {
 
 
 odp = OpenDataPortal("http://semantic.eea.europa.eu/sparql")
-odp.queryCurrentDS()
+# we want all datasets
+#odp.queryCurrentDS()
+odp.queryAllDS()
 odp.queryCurrentVoid()
 odp.queryObsoleteDS()
 odp.enditall()
