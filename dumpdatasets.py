@@ -366,6 +366,7 @@ WHERE {
         dct:description ?description;
         dct:hasPart ?datatable.
   OPTIONAL {?dataset dct:isReplacedBy ?isreplaced }
+  ?datatable dct:hasPart ?datafile
 }
 """
     
